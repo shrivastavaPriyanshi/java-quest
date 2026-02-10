@@ -1,8 +1,10 @@
+import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Header } from "@/components/Layout/Header";
 import { Button } from "@/components/ui/button";
-import { motion, AnimatePresence } from "framer-motion";
-import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { updateProgress } from "@/lib/api";
+import { WaterMeter } from "@/components/Level3/WaterMeter";
 
 // 🏜️ Exception Handling Questions
 const questions = [
@@ -10,253 +12,267 @@ const questions = [
     id: 1,
     text: "What happens when an exception is not handled in Java?",
     options: [
-      "The program crashes with an error message",
-      "It automatically retries the code",
-      "It ignores the exception",
-      "It continues running the next statement",
+      "The program crashes",
+      "It automatically retries",
+      "It ignores the error",
     ],
-    answer: "The program crashes with an error message",
+    answer: "The program crashes",
+    damage: 20,
+    heal: 30
   },
   {
     id: 2,
-    text: "Which block is always executed, whether exception occurs or not?",
-    options: ["catch", "throw", "finally", "try"],
+    text: "Which block is ALWAYS executed after try-catch?",
+    options: ["catch", "throw", "finally"],
     answer: "finally",
+    damage: 15,
+    heal: 25
   },
   {
     id: 3,
-    text: "What type of exception is thrown when dividing a number by zero?",
+    text: "Dividing by zero causes which exception?",
     options: [
-      "IOException",
-      "ArithmeticException",
       "NullPointerException",
-      "NumberFormatException",
+      "ArithmeticException",
+      "IOException",
     ],
     answer: "ArithmeticException",
+    damage: 25,
+    heal: 35
   },
   {
     id: 4,
-    text: "Which keyword is used to manually throw an exception?",
-    options: ["throw", "throws", "catch", "error"],
-    answer: "throw",
+    text: "How do you manually throw an exception?",
+    options: ["throw new Exception()", "throws Exception", "try Exception"],
+    answer: "throw new Exception()",
+    damage: 20,
+    heal: 30
+  },
+  {
+    id: 5,
+    text: "Which keyword declares that a method MIGHT throw an exception?",
+    options: ["throw", "throws", "try"],
+    answer: "throws",
+    damage: 15,
+    heal: 30
   },
 ];
 
 const Level3 = () => {
-  const [started, setStarted] = useState(false);
-  const [current, setCurrent] = useState(0);
-  const [selected, setSelected] = useState("");
-  const [feedback, setFeedback] = useState("");
-  const [score, setScore] = useState(0);
-  const [finished, setFinished] = useState(false);
-  const [passed, setPassed] = useState(false);
-  const [avatarX, setAvatarX] = useState(0);
-  const [emojis, setEmojis] = useState<{ id: number; emoji: string }[]>([]);
-  const [reward, setReward] = useState(false);
   const navigate = useNavigate();
 
-  // 🎉 Floating emoji effect
-  const spawnEmojis = () => {
-    const icons = ["🏜️", "💨", "🌟", "🏅"];
-    icons.forEach((emoji, i) =>
-      setTimeout(() => {
-        setEmojis((prev) => [...prev, { id: Date.now() + i, emoji }]);
-        setTimeout(() => setEmojis((prev) => prev.filter((e) => e.id !== Date.now() + i)), 2000);
-      }, i * 200)
-    );
-  };
+  // 🎮 Game State
+  const [started, setStarted] = useState(false);
+  const [currentQ, setCurrentQ] = useState(0);
+  const [water, setWater] = useState(100);
+  const [isGameOver, setIsGameOver] = useState(false);
+  const [finished, setFinished] = useState(false);
+  const [passed, setPassed] = useState(false);
+
+  // 🐫 Character
+  const [avatarX, setAvatarX] = useState(10);
+  const [status, setStatus] = useState<"idle" | "walking" | "drinking" | "hit">("idle");
+  const [feedback, setFeedback] = useState("");
+
+  // 🔥 Heat Drain Effect
+  useEffect(() => {
+    if (started && !finished && !isGameOver) {
+      const timer = setInterval(() => {
+        setWater((prev) => {
+          const newValue = prev - 0.8; // Drain 0.8% every tick
+          if (newValue <= 0) {
+            setIsGameOver(true);
+            return 0;
+          }
+          return newValue;
+        });
+      }, 200); // Fast ticks for smooth bar
+
+      return () => clearInterval(timer);
+    }
+  }, [started, finished, isGameOver]);
 
   const handleAnswer = (option: string) => {
-    if (selected) return;
-    setSelected(option);
-    const isCorrect = option === questions[current].answer;
+    const q = questions[currentQ];
+    const isCorrect = option === q.answer;
 
     if (isCorrect) {
-      setScore((prev) => prev + 25);
-      setFeedback("✅ Correct! +25 XP");
-      setAvatarX((prev) => prev + 220);
-    } else {
-      setFeedback("❌ Incorrect! A sandstorm blocks your path.");
-    }
+      setStatus("drinking");
+      setFeedback("💧 Refilled! Exception Handled.");
+      setWater((prev) => Math.min(100, prev + q.heal));
 
-    setTimeout(() => {
-      if (current + 1 < questions.length) {
-        setCurrent((prev) => prev + 1);
-        setSelected("");
-        setFeedback("");
-      } else {
-        // End of quiz
-        if (score + (isCorrect ? 25 : 0) === 100) {
-          setPassed(true);
-          localStorage.setItem("level3Completed", "true");
-          localStorage.setItem("reward", "+100 XP Gained 🏅");
-          const xp = Number(localStorage.getItem("xp") || 0);
-          localStorage.setItem("xp", String(xp + 100));
-          spawnEmojis();
-          setReward(true);
+      setTimeout(() => {
+        setStatus("walking");
+        setAvatarX((prev) => prev + 15); // Move forward relative %
 
-          setTimeout(() => {
-            setReward(false);
-            navigate("/map");
-          }, 4000);
+        if (currentQ + 1 < questions.length) {
+          setCurrentQ((p) => p + 1);
+          setStatus("idle");
+          setFeedback("");
         } else {
-          setFinished(true);
+          handleFinish(true);
         }
+      }, 1500);
+
+    } else {
+      setStatus("hit");
+      setFeedback("🔥 Ouch! Unhandled Exception.");
+      setWater((prev) => Math.max(0, prev - q.damage));
+
+      setTimeout(() => setStatus("idle"), 800);
+    }
+  };
+
+  const handleFinish = (win: boolean) => {
+    setFinished(true);
+    setPassed(win);
+    if (win) {
+      localStorage.setItem("level3Completed", "true");
+      // Sync with backend
+      const userId = localStorage.getItem("userId");
+      if (userId) {
+        updateProgress(userId, 100, ["Desert Survivor"])
+          .catch(err => console.error(err));
       }
-    }, 1200);
+    }
   };
 
   return (
-    <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-yellow-100 via-orange-50 to-amber-200">
+    <div className="min-h-screen relative overflow-hidden bg-orange-100 font-sans">
       <Header />
 
-      {/* 🏜️ Scrolling Desert Background */}
-      <motion.div
-        className="absolute w-[200%] h-full bg-[url('/desert-bg.png')] bg-repeat-x bg-cover opacity-70"
-        animate={{ x: [-100, 0] }}
-        transition={{ repeat: Infinity, duration: 25, ease: "linear" }}
+      {/* ☀️ Heat Overlay - Red vignette increases as water drops */}
+      <div
+        className="absolute inset-0 pointer-events-none z-40 transition-opacity duration-500"
+        style={{
+          background: "radial-gradient(circle, transparent 50%, red 100%)",
+          opacity: Math.max(0, (50 - water) / 50) // Starts showing at 50% water
+        }}
       />
 
-      {/* 🧕 Avatar walking animation */}
-      {started && !finished && (
-        <motion.div
-          initial={{ x: 0 }}
-          animate={{ x: avatarX }}
-          transition={{ type: "spring", stiffness: 60 }}
-          className="absolute bottom-14 left-12 text-6xl"
-        >
-          🧕
-        </motion.div>
-      )}
+      {/* 🏜️ Parallax Background */}
+      <motion.div
+        className="absolute inset-0 bg-[url('https://cdn.pixabay.com/photo/2017/01/03/22/53/desert-1950455_1280.png')] bg-cover bg-bottom opacity-40 z-0"
+        animate={{ x: [-50, 0] }}
+        transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
+      />
 
-      <main className="relative container py-10 text-center z-10">
-        <motion.h1
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-4xl font-bold font-pixel text-amber-700 mb-4"
-        >
-          🏜️ Exception Desert
-        </motion.h1>
+      {/* ☀️ Sun */}
+      <motion.div
+        className="absolute top-10 right-10 text-9xl"
+        animate={{ rotate: 360, scale: [1, 1.1, 1] }}
+        transition={{ duration: 20, repeat: Infinity }}
+      >🌞</motion.div>
 
-        {!started ? (
-          <>
-            <p className="text-lg text-muted-foreground mb-8 max-w-2xl mx-auto">
-              Cross the <b>Exception Desert</b> by handling runtime errors correctly using{" "}
-              <b>try-catch-finally</b> and <b>throw</b>!  
-              Every correct answer moves you closer to the oasis 🌴.
+
+      <main className="relative container h-[calc(100vh-80px)] flex flex-col items-center justify-center z-20">
+
+        {/* 💧 Water Meter (HUD) */}
+        {started && !isGameOver && !finished && <WaterMeter water={water} />}
+
+        {/* 📜 Intro Screen */}
+        {!started && (
+          <div className="bg-white/90 p-10 rounded-2xl shadow-2xl text-center max-w-2xl border-4 border-amber-500">
+            <h1 className="text-5xl font-bold text-amber-600 mb-6 font-pixel">🏜️ Desert Survival</h1>
+            <p className="text-xl text-slate-700 mb-8">
+              Your water is leaking! 💧<br />
+              Every second counts. <br />
+              <b>Answer correctly</b> to handle exceptions and refill your bottle.<br />
+              <b>Wrong answers</b> drain your water instantly!
             </p>
-            <Button size="lg" className="btn-quest" onClick={() => setStarted(true)}>
-              🌞 Start Your Journey
+            <Button onClick={() => setStarted(true)} size="lg" className="text-2xl px-12 py-8 bg-amber-600 hover:bg-amber-700 shadow-xl">
+              Start Surviving 🐪
             </Button>
-          </>
-        ) : !finished ? (
-          // 💬 Question Comic Bubble
-          <motion.div
-            key={questions[current].id}
-            initial={{ opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-white/80 dark:bg-gray-900/30 p-6 rounded-xl shadow-lg max-w-md mx-auto border border-amber-400"
-          >
+          </div>
+        )}
+
+        {/* 🎮 Game Loop */}
+        {started && !isGameOver && !finished && (
+          <div className="w-full max-w-xl relative mt-20">
+
+            {/* 🐪 Character Animation */}
             <motion.div
-              className="text-md mb-4 font-semibold"
-              animate={{ y: [0, -5, 0] }}
-              transition={{ repeat: Infinity, duration: 2 }}
+              className="text-8xl absolute -top-40 left-1/2 -translate-x-1/2"
+              animate={
+                status === "walking" ? { y: [0, -10, 0] } :
+                  status === "drinking" ? { scale: 1.2, rotate: -10 } :
+                    status === "hit" ? { x: [-10, 10, -10, 10, 0], color: "red" } : {}
+              }
             >
-              💬 {questions[current].text}
+              {status === "hit" ? "💀" : "🐪"}
             </motion.div>
 
-            <div className="space-y-3">
-              {questions[current].options.map((opt) => (
-                <Button
-                  key={opt}
-                  variant={selected === opt ? "default" : "outline"}
-                  onClick={() => handleAnswer(opt)}
-                  className="w-full"
-                  disabled={!!selected}
-                >
-                  {opt}
-                </Button>
-              ))}
+            {/* 💬 Question */}
+            <div className="bg-white/95 p-8 rounded-xl shadow-xl border-4 border-amber-300 text-center">
+              <h2 className="text-xl font-bold text-slate-800 mb-6">
+                {questions[currentQ].text}
+              </h2>
+
+              <div className="grid gap-3">
+                {questions[currentQ].options.map((opt) => (
+                  <Button
+                    key={opt}
+                    onClick={() => status === "idle" && handleAnswer(opt)}
+                    disabled={status !== "idle"}
+                    variant="outline"
+                    className="w-full text-lg py-6 hover:bg-amber-100 hover:border-amber-500"
+                  >
+                    {opt}
+                  </Button>
+                ))}
+              </div>
+
+              {/* Feedback */}
+              <AnimatePresence>
+                {feedback && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                    className={`mt-4 font-bold text-lg ${feedback.includes("Refilled") ? "text-blue-600" : "text-red-500"}`}
+                  >
+                    {feedback}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
+          </div>
+        )}
 
-            {feedback && (
-              <motion.p
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="mt-4 text-md font-medium"
-                style={{ color: feedback.includes("✅") ? "green" : "red" }}
-              >
-                {feedback}
-              </motion.p>
-            )}
-          </motion.div>
-        ) : passed ? (
-          // 🌟 Victory popup
+        {/* 💀 Game Over Screen */}
+        {isGameOver && (
           <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="p-8 bg-white/90 rounded-2xl shadow-lg max-w-lg mx-auto"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            className="bg-black/80 rounded-2xl p-10 text-center text-white border-4 border-red-600"
           >
-            <h2 className="text-3xl font-bold text-amber-600 mb-4">🎉 Desert Conquered!</h2>
-            <p className="text-lg mb-6">
-              You handled every exception perfectly 🏆  
-              +100 XP earned! Level 4 (Collection Castle) unlocked 🏰
-            </p>
-            <Button onClick={() => navigate("/map")}>🏜️ Return to Map</Button>
-          </motion.div>
-        ) : (
-          // ❌ Retry state
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="p-8 bg-white/90 rounded-2xl shadow-lg max-w-lg mx-auto"
-          >
-            <h2 className="text-3xl font-bold text-red-500 mb-4">💀 Lost in the Desert!</h2>
-            <p className="text-lg mb-6">
-              You scored <b>{score}/100</b>.  
-              You need to handle all exceptions correctly to survive 🌵
-            </p>
-            <Button onClick={() => window.location.reload()}>🔁 Try Again</Button>
+            <div className="text-8xl mb-4">☠️</div>
+            <h2 className="text-5xl font-bold text-red-500 mb-4">Program Crashed!</h2>
+            <p className="text-xl mb-8">You ran out of water (resources). Unhandled Exception Fatal Error.</p>
+            <Button onClick={() => window.location.reload()} size="lg" variant="destructive" className="text-xl">
+              Try Again
+            </Button>
           </motion.div>
         )}
+
+        {/* 🏆 Victory Screen */}
+        {finished && passed && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
+            className="bg-white/90 rounded-2xl p-10 text-center border-4 border-green-500 shadow-2xl"
+          >
+            <div className="text-8xl mb-4">🌴</div>
+            <h2 className="text-5xl font-bold text-green-600 mb-4">Oasis Found!</h2>
+            <p className="text-xl mb-8 text-slate-600">
+              You survived the Exception Desert. <br />
+              +100 XP Earned!
+            </p>
+            <Button onClick={() => navigate("/map")} size="lg" className="text-xl bg-green-600 hover:bg-green-700">
+              Continue Journey
+            </Button>
+          </motion.div>
+        )}
+
       </main>
-
-      {/* 🎉 Reward Screen */}
-      <AnimatePresence>
-        {reward && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.6 }}
-            className="fixed inset-0 bg-black/70 flex flex-col items-center justify-center z-[9999]"
-          >
-            <motion.h2
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1.2, opacity: 1 }}
-              transition={{ type: 'spring', stiffness: 150 }}
-              className="text-5xl font-bold text-yellow-300 mb-4"
-            >
-              🏜️ Sandstorm Victory!
-            </motion.h2>
-            <p className="text-white text-lg">+100 XP Earned 💨</p>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Floating emojis */}
-      {emojis.map((e) => (
-        <motion.div
-          key={e.id}
-          initial={{ opacity: 0, y: 50 }}
-          animate={{ opacity: 1, y: -200 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 2 }}
-          className="absolute left-1/2 text-4xl"
-        >
-          {e.emoji}
-        </motion.div>
-      ))}
     </div>
   );
 };

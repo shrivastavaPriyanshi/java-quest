@@ -1,4 +1,5 @@
 import { Header } from "@/components/Layout/Header";
+import { fetchLeaderboard } from "@/lib/api";
 import { useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -45,20 +46,32 @@ export const Leaderboard = () => {
   const [showReward, setShowReward] = useState(false);
   const [emojis, setEmojis] = useState<{ id: number; emoji: string }[]>([]);
 
-  // 🏆 Static leaderboard data (top 5)
-  const leaderboardData = [
-    { id: 1, rank: 1, name: "CodeMaster Alex", avatar: "🧙‍♂️", xp: 15000, badges: 12, title: "Java Archmage" },
-    { id: 2, rank: 2, name: "Knight Sarah", avatar: "⚔️", xp: 12500, badges: 10, title: "Code Crusader" },
-    { id: 3, rank: 3, name: "Wizard Mike", avatar: "🧙", xp: 11200, badges: 9, title: "Exception Handler" },
-    { id: 4, rank: 4, name: "Ranger Luna", avatar: "🏹", xp: 9800, badges: 8, title: "Loop Master" },
-    { id: 5, rank: 5, name: "Paladin John", avatar: "🛡️", xp: 8900, badges: 7, title: "Method Defender" },
-  ];
+  // 🏆 Leaderboard data state
+  const [leaderboardData, setLeaderboardData] = useState<any[]>([]);
 
-  // 🌀 Fetch XP and trigger reward animation when page loads or revisited
+  // 🌀 Fetch XP and Leaderboard
   useEffect(() => {
+    // Load local user XP (for "Your Progress" section - usually this would also be an API call if we had auth context stored)
     const storedXp = Number(localStorage.getItem("xp") || 0);
     setXp(storedXp);
     setBadges(Math.floor(storedXp / 100));
+
+    // Fetch global leaderboard
+    fetchLeaderboard()
+      .then((data) => {
+        // Map API data to UI format
+        const formattedData = data.map((user: any, index: number) => ({
+          id: user._id,
+          rank: index + 1,
+          name: user.name,
+          avatar: "🧙‍♂️", // Default avatar for now
+          xp: user.xp,
+          badges: user.badges.length,
+          title: "Java Novice" // Dynamic title could be based on Level
+        }));
+        setLeaderboardData(formattedData);
+      })
+      .catch((err) => console.error(err));
 
     const rewardMsg = localStorage.getItem("reward");
     if (rewardMsg) {
@@ -121,13 +134,12 @@ export const Leaderboard = () => {
               key={player.id}
               whileHover={{ scale: 1.05 }}
               transition={{ duration: 0.3 }}
-              className={`flex flex-col items-center text-center p-5 rounded-xl ${
-                player.rank === 1
-                  ? "bg-gradient-to-br from-yellow-300 to-yellow-400 shadow-[0_0_25px_rgba(255,215,0,0.5)]"
-                  : player.rank === 2
+              className={`flex flex-col items-center text-center p-5 rounded-xl ${player.rank === 1
+                ? "bg-gradient-to-br from-yellow-300 to-yellow-400 shadow-[0_0_25px_rgba(255,215,0,0.5)]"
+                : player.rank === 2
                   ? "bg-gradient-to-br from-gray-300 to-gray-400 shadow-[0_0_20px_rgba(180,180,180,0.4)]"
                   : "bg-gradient-to-br from-amber-400 to-amber-500 shadow-[0_0_20px_rgba(255,180,50,0.4)]"
-              }`}
+                }`}
               style={{ height: player.rank === 1 ? 200 : player.rank === 2 ? 160 : 140 }}
             >
               <div className="text-4xl mb-2">{player.avatar}</div>

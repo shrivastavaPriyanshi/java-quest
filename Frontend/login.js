@@ -30,11 +30,14 @@ document.addEventListener("DOMContentLoaded", () => {
       if (res.ok) {
         localStorage.setItem("token", data.token);
         localStorage.setItem("userEmail", email);
+        localStorage.setItem("userId", data.userId);
+        localStorage.setItem("xp", data.xp || 0);
+        localStorage.setItem("badges", JSON.stringify(data.badges || []));
 
         showMessage("🎉 Login successful! Redirecting...", "#b7f397");
 
         setTimeout(() => {
-        window.location.href = "/";
+          window.location.href = "/";
         }, 1000);
 
       } else {

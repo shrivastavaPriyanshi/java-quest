@@ -1,8 +1,11 @@
+import { useState, useRef, useEffect } from "react";
+import { motion, useScroll, useSpring } from "framer-motion";
 import { Header } from "@/components/Layout/Header";
 import { Button } from "@/components/ui/button";
-import { motion, AnimatePresence } from "framer-motion";
-import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { updateProgress } from "@/lib/api";
+import { Branch } from "@/components/Level2/Branch";
+import { JumpingCharacter } from "@/components/Level2/JumpingCharacter"; // Correct path
 
 // 🌲 OOP Forest Questions
 const questions = [
@@ -14,245 +17,201 @@ const questions = [
   },
   {
     id: 2,
-    text: "In Java, what is the correct way to create an object of a class named Car?",
+    text: "How do you create an object of class 'Car'?",
     options: [
-      "Car myCar = Car();",
-      "Car myCar = new Car();",
-      "new Car = myCar();",
-      "create Car myCar();",
+      "Car c = Car();",
+      "Car c = new Car();",
+      "new Car c;",
+      "Car c = new();",
     ],
-    answer: "Car myCar = new Car();",
+    answer: "Car c = new Car();",
   },
   {
     id: 3,
-    text: "What is encapsulation in OOP?",
+    text: "What is encapsulation?",
     options: [
-      "Hiding internal data and showing only necessary features",
-      "Using multiple classes",
-      "Deriving one class from another",
-      "Overriding methods",
+      "Hiding data",
+      "Multiple inheritance",
+      "Copying code",
+      "Deleting objects",
     ],
-    answer: "Hiding internal data and showing only necessary features",
+    answer: "Hiding data",
   },
   {
     id: 4,
-    text: "Which OOP concept allows one class to inherit properties of another?",
-    options: ["Polymorphism", "Encapsulation", "Inheritance", "Abstraction"],
+    text: "Which concept allows inheriting properties?",
+    options: ["Polymorphism", "Abstraction", "Inheritance", "Arrays"],
     answer: "Inheritance",
+  },
+  {
+    id: 5,
+    text: "What is the parent class of all classes in Java?",
+    options: ["Object", "String", "Main", "Class"],
+    answer: "Object",
   },
 ];
 
 const Level2 = () => {
+  const navigate = useNavigate();
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // 🎮 Game State
   const [started, setStarted] = useState(false);
-  const [current, setCurrent] = useState(0);
-  const [selected, setSelected] = useState("");
-  const [feedback, setFeedback] = useState("");
+  const [currentBranch, setCurrentBranch] = useState(0); // 0 = Ground
+  const [status, setStatus] = useState<"idle" | "jumping" | "falling">("idle");
   const [score, setScore] = useState(0);
   const [finished, setFinished] = useState(false);
   const [passed, setPassed] = useState(false);
 
-  const [avatarX, setAvatarX] = useState(0);
-  const [celebrate, setCelebrate] = useState(false);
+  // 📷 Camera Scroll
+  useEffect(() => {
+    // Scroll to the active branch
+    const el = document.getElementById(`branch-${currentBranch}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [currentBranch, started]);
 
-  const navigate = useNavigate();
-
-  const handleAnswer = (option: string) => {
-    if (selected) return;
-
-    setSelected(option);
-    const isCorrect = option === questions[current].answer;
+  const handleAnswer = (option: string, qIndex: number) => {
+    const isCorrect = option === questions[qIndex].answer;
 
     if (isCorrect) {
-      setScore((prev) => prev + 25);
-      setFeedback("✨ Correct!");
+      setStatus("jumping");
+      // Play jump sound
+      setTimeout(() => {
+        setCurrentBranch((prev) => prev + 1);
+        setScore((s) => s + 20);
+        setStatus("idle");
 
-      // move avatar
-      setAvatarX((prev) => prev + 200);
-
-      // celebration glow + confetti
-      setCelebrate(true);
-      setTimeout(() => setCelebrate(false), 1200);
+        if (currentBranch + 1 >= questions.length) {
+          handleFinish(true);
+        }
+      }, 600); // Wait for jump animation
     } else {
-      setFeedback("❌ Wrong! Try again.");
+      setStatus("falling");
+      // Play fall sound
+      setTimeout(() => {
+        setCurrentBranch((prev) => Math.max(0, prev - 1));
+        // setScore((s) => Math.max(0, s - 10)); // Optional penalty
+        setStatus("idle");
+      }, 800);
     }
+  };
 
+  const handleFinish = (win: boolean) => {
     setTimeout(() => {
-      if (current + 1 < questions.length) {
-        setCurrent((prev) => prev + 1);
-        setSelected("");
-        setFeedback("");
-      } else {
-        setFinished(true);
-
-        if (score + (isCorrect ? 25 : 0) === 100) {
-          setPassed(true);
-          localStorage.setItem("level2Completed", "true");
-          const xp = Number(localStorage.getItem("xp") || 0);
-          localStorage.setItem("xp", String(xp + 100));
-          localStorage.setItem("reward", "+150 XP Earned!");
-        } else {
-          setPassed(false);
+      setFinished(true);
+      setPassed(win);
+      if (win) {
+        localStorage.setItem("level2Completed", "true");
+        // Sync with backend
+        const userId = localStorage.getItem("userId");
+        if (userId) {
+          updateProgress(userId, 100, ["Forest Ranger"])
+            .catch(err => console.error(err));
         }
       }
-    }, 1200);
+    }, 1000);
   };
 
   return (
-    <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-green-100 via-emerald-50 to-teal-100">
+    <div className="h-screen overflow-hidden bg-gradient-to-b from-sky-200 to-green-100 flex flex-col">
       <Header />
 
-      {/* 🌲 animated forest bg */}
-      <div className="absolute inset-0 overflow-hidden">
+      {/* 🌤️ Parallax Background */}
+      <div className="absolute inset-0 z-0 opacity-40 pointer-events-none">
         <motion.div
-          className="absolute w-[200%] h-full bg-[url('/forest-bg.png')] bg-repeat-x bg-cover opacity-60"
-          animate={{ x: [-100, 0] }}
-          transition={{ repeat: Infinity, duration: 20, ease: "linear" }}
-        />
+          className="absolute top-10 left-10 text-9xl text-white/60"
+          animate={{ x: [0, 50, 0] }}
+          transition={{ duration: 10, repeat: Infinity }}
+        >☁️</motion.div>
+        <motion.div
+          className="absolute top-40 right-20 text-8xl text-white/50"
+          animate={{ x: [0, -30, 0] }}
+          transition={{ duration: 15, repeat: Infinity }}
+        >☁️</motion.div>
       </div>
 
-      {/* 🧙 avatar */}
-      {started && !finished && (
-        <motion.div
-          animate={{ x: avatarX }}
-          transition={{ type: "spring", stiffness: 60 }}
-          className="absolute bottom-6 left-12 text-7xl"
-        >
-          🧙‍♂️
-        </motion.div>
-      )}
+      <main className="flex-1 relative overflow-y-auto no-scrollbar scroll-smooth" ref={scrollRef}>
 
-      <main className="relative container py-10 text-center z-10">
-        <motion.h1
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-4xl font-bold font-pixel text-green-700 mb-4"
-        >
-          🌲 OOP Forest
-        </motion.h1>
-
-        {!started ? (
-          <>
-            <p className="text-lg text-muted-foreground mb-8 max-w-2xl mx-auto">
-              Master <b>Classes</b>, <b>Objects</b> and <b>Encapsulation</b>.
-              Answer everything correctly to unlock the next land 🌿
+        {/* 📜 Intro Screen */}
+        {!started && (
+          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm text-white">
+            <h1 className="text-5xl font-bold font-pixel mb-6 text-green-400">🌲 OOP Forest</h1>
+            <p className="text-xl mb-8 max-w-lg text-center">
+              Climb the Tree of Knowledge! <br />
+              Answer correctly to jump UP. <br />
+              Wrong answers make you fall DOWN.
             </p>
-
-            <Button size="lg" onClick={() => setStarted(true)}>
-              🌟 Enter the Forest
+            <Button onClick={() => setStarted(true)} size="lg" className="text-xl px-10 py-6 bg-green-600 hover:bg-green-700">
+              Start Climbing 🐒
             </Button>
-          </>
-        ) : !finished ? (
-          <motion.div
-            key={questions[current].id}
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-white/80 p-6 rounded-xl shadow-lg max-w-md mx-auto border border-green-300"
-          >
-            <div className="font-semibold mb-4">
-              💬 {questions[current].text}
-            </div>
-
-            <div className="space-y-3">
-              {questions[current].options.map((opt) => (
-                <Button
-                  key={opt}
-                  variant={selected === opt ? "default" : "outline"}
-                  onClick={() => handleAnswer(opt)}
-                  className="w-full"
-                  disabled={!!selected}
-                >
-                  {opt}
-                </Button>
-              ))}
-            </div>
-
-            {feedback && (
-              <p
-                className="mt-4 font-medium"
-                style={{ color: feedback.includes("✨") ? "green" : "red" }}
-              >
-                {feedback}
-              </p>
-            )}
-          </motion.div>
-        ) : passed ? (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="p-8 bg-white/90 rounded-2xl shadow-lg max-w-lg mx-auto"
-          >
-            <h2 className="text-3xl font-bold text-green-600 mb-4">
-              🎉 Forest Conquered!
-            </h2>
-            <p className="text-lg mb-6">
-              +100 XP — Level 3 unlocked 🏜️
-            </p>
-            <Button onClick={() => navigate("/map")}>🗺 Return to Map</Button>
-          </motion.div>
-        ) : (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="p-8 bg-white/90 rounded-2xl shadow-lg max-w-lg mx-auto"
-          >
-            <h2 className="text-3xl font-bold text-red-600 mb-4">
-              ❌ Lost in the Forest
-            </h2>
-            <p className="text-lg mb-6">
-              Score: {score}/100 — Try again 🌿
-            </p>
-            <Button onClick={() => window.location.reload()}>
-              🔁 Retry Level
-            </Button>
-          </motion.div>
+          </div>
         )}
+
+        {/* 🌳 The Giant Tree Container */}
+        <div
+          className="relative w-full max-w-3xl mx-auto pb-20 pt-[60vh]" // Added padding to push content
+        >
+
+          {/* Trunk */}
+          <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-32 bg-amber-900 rounded-t-full shadow-2xl" />
+
+          {/* Ground */}
+          <div className="absolute bottom-0 w-full h-24 bg-green-800 z-10 border-t-8 border-green-900" />
+
+          {/* 🌿 Branches & Questions */}
+          <div className="flex flex-col-reverse relative z-10">
+            {questions.map((q, index) => (
+              <div id={`branch-${index}`} key={q.id} className="relative py-12">
+                <Branch
+                  question={q.text}
+                  options={q.options}
+                  onSelect={(opt) => handleAnswer(opt, index)}
+                  isActive={index === currentBranch}
+                  align={index % 2 === 0 ? "left" : "right"}
+                  disabled={finished || index !== currentBranch}
+                />
+
+                {/* 🐒 Character Positioned Relative to Branch */}
+                {currentBranch === index && !finished && (
+                  <div className={`absolute bottom-20 transition-all duration-500 z-50 ${index % 2 === 0 ? "left-[15%]" : "right-[15%]"}`}>
+                    <JumpingCharacter
+                      branchIndex={0} // Relative to parent
+                      status={status}
+                      align={index % 2 === 0 ? "left" : "right"}
+                    />
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* 🐒 Character - Removed global absolute one, now nested */}
+
+        </div>
+
+        {/* 📊 HUD */}
+        <div className="absolute top-4 right-4 bg-white/90 p-4 rounded-xl shadow-lg z-40">
+          <div className="text-xs font-bold text-slate-500">HEIGHT</div>
+          <div className="text-2xl font-bold text-green-600">{currentBranch * 10}m</div>
+        </div>
+
       </main>
 
-      {/* 🎉 Celebration overlay */}
-      <AnimatePresence>
-        {celebrate && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.4 }}
-            className="fixed inset-0 z-[999] pointer-events-none bg-white/30 backdrop-blur-[2px]"
-          >
-            {/* glow */}
-            <motion.div
-              initial={{ scale: 0.7, opacity: 0 }}
-              animate={{ scale: 1.4, opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.6 }}
-              className="absolute inset-0 bg-gradient-to-br from-green-200/40 via-yellow-100/40 to-white/40"
-            />
+      {/* 🏆 Win Screen */}
+      {finished && passed && (
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/80 text-white">
+          <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="text-9xl mb-4">👑</motion.div>
+          <h2 className="text-5xl font-bold text-yellow-400 mb-4">Tree Top Reached!</h2>
+          <p className="text-xl mb-8">+100 XP Earned</p>
+          <div className="flex gap-4">
+            <Button onClick={() => navigate("/map")} variant="secondary" size="lg">Map</Button>
+            <Button onClick={() => window.location.reload()} variant="outline" className="text-black" size="lg">Play Again</Button>
+          </div>
+        </div>
+      )}
 
-            {/* bomb */}
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ type: "spring", stiffness: 120 }}
-              className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-7xl"
-            >
-              🎉
-            </motion.div>
-
-            {/* confetti */}
-            {[...Array(14)].map((_, i) => (
-              <motion.div
-                key={i}
-                initial={{ y: -50, x: Math.random() * window.innerWidth }}
-                animate={{ y: window.innerHeight + 50 }}
-                transition={{ duration: 1.2, ease: "easeOut" }}
-                className="absolute text-3xl"
-              >
-                🎊
-              </motion.div>
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 };

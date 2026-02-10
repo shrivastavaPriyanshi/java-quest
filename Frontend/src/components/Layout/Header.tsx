@@ -1,19 +1,72 @@
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Moon, Sun, Sword, Trophy, User, Users, LogOut, Settings, Share2 } from "lucide-react";
+import { Moon, Sun, Sword, Trophy, User, Users, LogOut, Settings, Share2, TerminalSquare, Book, Sprout, Award } from "lucide-react";
 import { motion } from "framer-motion";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
-export const Header = () => {
-  const [isDark, setIsDark] = useState(false);
+import { Flame } from "lucide-react";
+import { useEffect } from "react";
+
+interface HeaderProps {
+  fluid?: boolean;
+}
+
+export const Header = ({ fluid = false }: HeaderProps) => {
+  // Initialize state based on actual DOM or localStorage
+  const [isDark, setIsDark] = useState(() => {
+    // Check if dark class is present or saved preference
+    return document.documentElement.classList.contains("dark") || localStorage.getItem("theme") === "dark";
+  });
+  const [streak, setStreak] = useState(0);
   const navigate = useNavigate();
 
+  useEffect(() => {
+    // Sync React state with DOM on mount
+    if (isDark) {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+
+    // Check Streak Logic
+    const lastLoginDate = localStorage.getItem("lastLoginDate");
+    const currentStreak = parseInt(localStorage.getItem("streak") || "0");
+    const today = new Date().toDateString();
+
+    if (lastLoginDate !== today) {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+
+      if (lastLoginDate === yesterday.toDateString()) {
+        // Streak continues
+        const newStreak = currentStreak + 1;
+        setStreak(newStreak);
+        localStorage.setItem("streak", newStreak.toString());
+      } else {
+        // Streak broken (or first time)
+        setStreak(1);
+        localStorage.setItem("streak", "1");
+      }
+      localStorage.setItem("lastLoginDate", today);
+    } else {
+      // Already logged in today
+      setStreak(currentStreak);
+    }
+  }, []);
+
   const toggleTheme = () => {
-    setIsDark(!isDark);
-    document.documentElement.classList.toggle("dark");
+    const newDark = !isDark;
+    setIsDark(newDark);
+    if (newDark) {
+      document.documentElement.classList.add("dark");
+      localStorage.setItem("theme", "dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+      localStorage.setItem("theme", "light");
+    }
   };
 
   const handleLogout = () => {
@@ -34,7 +87,7 @@ export const Header = () => {
       animate={{ y: 0 }}
       className="sticky top-0 z-50 w-full bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border"
     >
-      <div className="container flex h-16 items-center justify-between">
+      <div className={`${fluid ? "w-full px-6" : "container"} flex h-16 items-center justify-between`}>
         {/* Logo */}
         <Link to="/" className="flex items-center space-x-2">
           <motion.div
@@ -54,19 +107,43 @@ export const Header = () => {
         <nav className="hidden md:flex items-center space-x-6">
           <Link to="/leaderboard">
             <Button variant="ghost" className="flex items-center space-x-2 text-foreground hover:text-primary transition-colors">
-              <Trophy className="w-4 h-4" />
-              <span>Leaderboard</span>
+              <Trophy className="w-5 h-5" />
+              <span className="text-base font-medium">Leaderboard</span>
             </Button>
           </Link>
           <Link to="/friends">
             <Button variant="ghost" className="flex items-center space-x-2 text-foreground hover:text-primary transition-colors">
-              <Users className="w-4 h-4" />
-              <span>Friends</span>
+              <Users className="w-5 h-5" />
+              <span className="text-base font-medium">Friends</span>
+            </Button>
+          </Link>
+          <Link to="/playground">
+            <Button variant="ghost" className="flex items-center space-x-2 text-foreground hover:text-primary transition-colors">
+              <TerminalSquare className="w-5 h-5" />
+              <span className="text-base font-medium">Playground</span>
+            </Button>
+          </Link>
+          <Link to="/notes">
+            <Button variant="ghost" className="flex items-center space-x-2 text-foreground hover:text-primary transition-colors">
+              <Book className="w-5 h-5" />
+              <span className="text-base font-medium">Notes</span>
+            </Button>
+          </Link>
+          <Link to="/skills">
+            <Button variant="ghost" className="flex items-center space-x-2 text-foreground hover:text-primary transition-colors">
+              <Sprout className="w-5 h-5" />
+              <span className="text-base font-medium">Skill Tree</span>
+            </Button>
+          </Link>
+          <Link to="/badges">
+            <Button variant="ghost" className="flex items-center space-x-2 text-foreground hover:text-primary transition-colors">
+              <Award className="w-5 h-5" />
+              <span className="text-base font-medium">Badges</span>
             </Button>
           </Link>
           <Link to="/about">
             <Button variant="ghost" className="flex items-center space-x-2 text-foreground hover:text-primary transition-colors">
-              <span>About</span>
+              <span className="text-base font-medium">About</span>
             </Button>
           </Link>
         </nav>
